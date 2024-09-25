@@ -53,7 +53,8 @@ def generate_pdf(book_path, pandoc_path, output_path, debug_latex):
            '--variable', 'linkcolor=[HTML]{de5d43}',
            '--template', 'eisvogel-tspl',
            '--lua-filter', 'rewrite-retina-image-references.lua',
-           '--listings'] + output_options
+           '--highlight-style', 'tspl-code-highlight.theme',
+          ] + output_options
 
     if subprocess.run(cmd, text=True).returncode:
         print(f'pandoc command execution failure:\n{shlex.join(cmd)}')
@@ -175,7 +176,6 @@ def rewrite_internal_docc_references_for_pandoc(line, paths_and_titles_mapping):
         return f'[{human_readable_label}](#{identifier})'
 
     line = re.sub(r'<doc:([\w#-]+)>', pandoc_markdown_reference_for_docc_reference_match, line)
-    # line = re.sub(r'\\<doc:([\w#-]+)\\>', pandoc_markdown_reference_for_docc_reference_match, line)
 
     return line
 
@@ -208,8 +208,6 @@ def markdown_header_lines(book_path):
         - "Apple SD Gothic Neo:mode=harf"
         - "Hiragino Sans:mode=harf"
         fontsize: "10pt"
-        titlepage-logo: "Swift_logo.png"
-        logo-width: "22mm"
         code-block-font-size: "\\\\footnotesize"
         listings-disable-line-numbers: true
         listings-no-page-break: false
