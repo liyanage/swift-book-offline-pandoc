@@ -219,10 +219,7 @@ def markdown_header_lines(book_path):
         fontsize: "10pt"
         listings-disable-line-numbers: true
         listings-no-page-break: false
-        block-headings: true
         papersize: letter
-        header-includes: 
-        - \\usepackage[document]{{ragged2e}}
         ---
     ''').splitlines(keepends=False)
 

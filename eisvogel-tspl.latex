@@ -71,6 +71,20 @@ $for(classoption)$
 $endfor$
   ,captions=tableheading
 ]{$if(beamer)$$documentclass$$else$$if(book)$scrbook$else$scrartcl$endif$$endif$}
+
+\usepackage{titlesec}
+
+\titleformat{\section}[hang]{\bfseries}{}{32pt}{\huge}
+\titleformat{\subsection}[hang]{\bfseries}{}{26pt}{\LARGE}
+\titleformat{\subsubsection}[hang]{\bfseries}{}{21pt}{\Large}
+\titleformat{\paragraph}[hang]{\bfseries}{}{18pt}{\large}
+\titleformat{\subparagraph}[hang]{\bfseries}{}{14pt}{\normalsize}
+
+\titlespacing*{\subsubsection}{0pt}{16pt}{4pt}
+\titlespacing*{\paragraph}{0pt}{14pt}{0pt}
+\titlespacing*{\subparagraph}{0pt}{10pt}{0pt}
+
+
 $if(beamer)$
 $if(background-image)$
 \usebackgroundtemplate{%
@@ -590,17 +604,7 @@ $endif$
 $endif$
 \author{$for(author)$$author$$sep$ \and $endfor$}
 \date{$date$}
-$if(beamer)$
-$if(institute)$
-\institute{$for(institute)$$institute$$sep$ \and $endfor$}
-$endif$
-$if(titlegraphic)$
-\titlegraphic{\includegraphics{$titlegraphic$}}
-$endif$
-$if(logo)$
-\logo{\includegraphics{$logo$}}
-$endif$
-$endif$
+
 
 
 
@@ -657,46 +661,6 @@ $endif$
 \newmdenv[rightline=false,bottomline=false,topline=false,linewidth=3pt,linecolor=blockquote-border,skipabove=\parskip]{customblockquote}
 \renewenvironment{quote}{\begin{customblockquote}\list{}{\rightmargin=0em\leftmargin=0em}%
 \item\relax\color{blockquote-text}\ignorespaces}{\unskip\unskip\endlist\end{customblockquote}}
-
-%
-% Source Sans Pro as the default font family
-% Source Code Pro for monospace text
-%
-% 'default' option sets the default
-% font family to Source Sans Pro, not \sfdefault.
-%
-\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
-  $if(fontfamily)$
-  $else$
-  \usepackage[default]{sourcesanspro}
-  \usepackage{sourcecodepro}
-  $endif$
-\else % if not pdftex
-  $if(mainfont)$
-  $else$
-  \usepackage[default]{sourcesanspro}
-  \usepackage{sourcecodepro}
-
-  % XeLaTeX specific adjustments for straight quotes: https://tex.stackexchange.com/a/354887
-  % This issue is already fixed (see https://github.com/silkeh/latex-sourcecodepro/pull/5) but the
-  % fix is still unreleased.
-  % TODO: Remove this workaround when the new version of sourcecodepro is released on CTAN.
-  \ifxetex
-    \makeatletter
-    \defaultfontfeatures[\ttfamily]
-      { Numbers   = \sourcecodepro@figurestyle,
-        Scale     = \SourceCodePro@scale,
-        Extension = .otf }
-    \setmonofont
-      [ UprightFont    = *-\sourcecodepro@regstyle,
-        ItalicFont     = *-\sourcecodepro@regstyle It,
-        BoldFont       = *-\sourcecodepro@boldstyle,
-        BoldItalicFont = *-\sourcecodepro@boldstyle It ]
-      {SourceCodePro}
-    \makeatother
-  \fi
-  $endif$
-\fi
 
 %
 % heading color
@@ -929,6 +893,10 @@ $endif$
 %% end added
 %%
 
+%% Don't justify text
+\usepackage[document]{ragged2e}
+
+%% Put terms in definition list on their own line, separate from their definitions
 \usepackage{enumitem}
 \setlist[description]{style=nextline}
 
