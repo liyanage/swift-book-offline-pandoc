@@ -60,8 +60,6 @@ def generate_pdf(book_path, pandoc_path, output_path, debug_latex):
         print(f'pandoc command execution failure:\n{shlex.join(cmd)}')
     else:
         print(f'Output written to {output_path}')
-    
-    combined_markdown_path.unlink()
 
 
 def preprocess_main_file_markdown(book_path, pandoc_path, main_markdown_file_text):
