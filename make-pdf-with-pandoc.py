@@ -201,7 +201,7 @@ def markdown_header_lines(book_path):
         titlepage-rule-color: "de5d43"
         strip-comments: true
         sansfont: "SF Pro Text Heavy"
-        mainfont: "SF Pro Text Regular"
+        mainfont: "SF Pro Text"
         monofontoptions:
         - "Scale=0.9"
         mainfontfallback:
