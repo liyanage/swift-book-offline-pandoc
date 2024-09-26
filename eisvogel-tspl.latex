@@ -134,7 +134,7 @@ $else$
 % Use setspace anyway because we change the default line spacing.
 % The spacing is changed early to affect the titlepage and the TOC.
 \usepackage{setspace}
-\setstretch{1.2}
+\setstretch{1.15}
 $endif$
 \usepackage{iftex}
 \ifPDFTeX
@@ -928,6 +928,9 @@ $endif$
 %%
 %% end added
 %%
+
+\usepackage{enumitem}
+\setlist[description]{style=nextline}
 
 \begin{document}
 
