@@ -117,22 +117,18 @@ def lines_for_included_document(markdown_file_stem, pandoc_path, paths_and_title
     text = markdown_file_path.read_text()
     # TODO: remove this regex processing after non-well-formed HTML comments are in book sources (136551557)
     text = re.sub(r'<!--.+?-->', '', text, flags=re.DOTALL)
-    lines = rewrite_docc_markdown_for_pandoc(text.splitlines(keepends=False), paths_and_titles_mapping)
-
-    # We need to shift down the heading levels for each included per-chapter markdown
-    # file by one level so they line up with the headings in the main file.
-    cmd = [os.fspath(pandoc_path), '--from', 'markdown', '--to', 'markdown', '--shift-heading-level-by=1']
-    result = subprocess.run(cmd, capture_output=True, text=True, check=True, input='\n'.join(lines))
-    return [r'\newpage{}'] + result.stdout.splitlines(keepends=False) + ['']
+    lines = rewrite_chapter_file_docc_markdown_for_pandoc(text.splitlines(keepends=False), paths_and_titles_mapping)
+    return [r'\newpage{}'] + lines + ['']
 
 
-def rewrite_docc_markdown_for_pandoc(markdown_lines, paths_and_titles_mapping):
+def rewrite_chapter_file_docc_markdown_for_pandoc(markdown_lines, paths_and_titles_mapping):
     out = []
 
     state = 'start'
     while markdown_lines:
         line = markdown_lines.pop(0)
-        line = rewrite_internal_docc_references_for_pandoc(line, paths_and_titles_mapping)
+        line = rewrite_docc_to_pandoc_internal_references(line, paths_and_titles_mapping)
+        line = rewrite_docc_to_pandoc_optionality_marker(line)
 
         pushback = None
 
@@ -140,6 +136,11 @@ def rewrite_docc_markdown_for_pandoc(markdown_lines, paths_and_titles_mapping):
             if match := re.match(r'- term (.+):', line):
                 out.append(match.group(1))
                 state = 'start_definition_list'
+            elif match := re.match(r'(#+ .+)', line):
+                # We need to shift down the heading levels for each included
+                # per-chapter markdown file by one level so they line up with
+                # the headings in the main file.
+                out.append('#' + match.group(1))
             else:
                 out.append(line)
         elif state == 'start_definition_list':
@@ -164,7 +165,7 @@ def rewrite_docc_markdown_for_pandoc(markdown_lines, paths_and_titles_mapping):
     return out
 
 
-def rewrite_internal_docc_references_for_pandoc(line, paths_and_titles_mapping):
+def rewrite_docc_to_pandoc_internal_references(line, paths_and_titles_mapping):
     def pandoc_markdown_reference_for_docc_reference_match(match):
         text = match.group(1)
         if '#' in text:
@@ -178,6 +179,10 @@ def rewrite_internal_docc_references_for_pandoc(line, paths_and_titles_mapping):
     line = re.sub(r'<doc:([\w#-]+)>', pandoc_markdown_reference_for_docc_reference_match, line)
 
     return line
+
+
+def rewrite_docc_to_pandoc_optionality_marker(line):
+    return line.replace('*_?_', '?*')
 
 
 def markdown_header_lines(book_path):
