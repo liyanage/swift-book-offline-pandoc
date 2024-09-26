@@ -206,12 +206,12 @@ def markdown_header_lines(book_path):
         strip-comments: true
         sansfont: "SF Pro Text Heavy"
         mainfont: "SF Pro Text"
-        monofontoptions:
-        - "Scale=0.9"
         mainfontfallback:
         - "Apple Color Emoji:mode=harf"
         - "Helvetica Neue:mode=harf"
         monofont: "Menlo"
+        monofontoptions:
+        - "Scale=0.9"
         monofontfallback:
         - "Sathu:mode=harf"
         - "Al Nile:mode=harf"        
@@ -223,8 +223,6 @@ def markdown_header_lines(book_path):
         listings-no-page-break: false
         block-headings: true
         papersize: letter
-        monofontoptions:
-        - "Scale=0.9"
         header-includes: 
         - \\usepackage[document]{{ragged2e}}
         ---
