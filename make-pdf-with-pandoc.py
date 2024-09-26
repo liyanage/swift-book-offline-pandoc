@@ -126,12 +126,8 @@ def rewrite_chapter_file_docc_markdown_for_pandoc(markdown_lines, paths_and_titl
 
     state = 'start'
     while markdown_lines:
-        line = markdown_lines.pop(0)
-        line = rewrite_docc_to_pandoc_internal_references(line, paths_and_titles_mapping)
-        line = rewrite_docc_to_pandoc_optionality_marker(line)
-
+        line = rewrite_docc_to_pandoc_markdown(markdown_lines.pop(0), paths_and_titles_mapping)
         pushback = None
-
         if state == 'start':
             if match := re.match(r'- term (.+):', line):
                 out.append(match.group(1))
@@ -165,6 +161,14 @@ def rewrite_chapter_file_docc_markdown_for_pandoc(markdown_lines, paths_and_titl
     return out
 
 
+def rewrite_docc_to_pandoc_markdown(line, paths_and_titles_mapping):
+    # These need to be idempotent because of the pushback that can
+    # happen for a line in the caller
+    line = rewrite_docc_to_pandoc_internal_references(line, paths_and_titles_mapping)
+    line = rewrite_docc_to_pandoc_optionality_marker(line)
+    return line
+
+
 def rewrite_docc_to_pandoc_internal_references(line, paths_and_titles_mapping):
     def pandoc_markdown_reference_for_docc_reference_match(match):
         text = match.group(1)
@@ -182,7 +186,7 @@ def rewrite_docc_to_pandoc_internal_references(line, paths_and_titles_mapping):
 
 
 def rewrite_docc_to_pandoc_optionality_marker(line):
-    return line.replace('*_?_', '?*')
+    return re.sub(r'(\*{1,2})_\?_', r'?\1', line)
 
 
 def markdown_header_lines(book_path):
