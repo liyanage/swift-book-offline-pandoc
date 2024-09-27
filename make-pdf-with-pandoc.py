@@ -189,7 +189,7 @@ def rewrite_docc_to_pandoc_optionality_marker(line):
 
 def markdown_header_lines(book_path):
     first_level_1_heading = title_from_first_heading_in_markdown_file(book_path / 'TSPL.docc/The-Swift-Programming-Language.md')
-    git_tag = git_tag_for_working_copy_path(book_path)
+    git_tag = git_tag_or_ref_for_working_copy_path(book_path)
     timestamp = subprocess.check_output(['git', '-C', os.fspath(book_path), 'for-each-ref', '--format', '%(taggerdate:short)', f'refs/tags/{git_tag}'], text=True).strip()
 
     return textwrap.dedent(f'''
@@ -229,11 +229,15 @@ def title_from_first_heading_in_markdown_file(path):
         return next((line[2:] for line in f if line.startswith('# ')), None)
 
 
-def git_tag_for_working_copy_path(working_copy_path):
+def git_tag_or_ref_for_working_copy_path(working_copy_path):
     output = subprocess.check_output(['git', '-C', os.fspath(working_copy_path), 'tag', '--points-at', 'HEAD'], text=True)
     tags = [l for l in output.splitlines(keepends=False) if l]
-    assert len(tags) == 1
-    return tags[0]
+    if tags:
+        return tags[0]
+
+    output = subprocess.check_output(['git', '-C', os.fspath(working_copy_path), 'symbolic-ref', '--short', 'HEAD'], text=True)
+    refs = [l for l in output.splitlines(keepends=False) if l]
+    return refs[0]
 
 
 if __name__ == "__main__":
