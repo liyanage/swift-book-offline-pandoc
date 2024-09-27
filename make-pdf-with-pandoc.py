@@ -95,7 +95,7 @@ def preprocess_main_file_markdown(book_path, pandoc_path, main_markdown_file_tex
                 # the lines of the referenced file at this point
                 markdown_file_to_include_stem = match.group(1)
                 if not debug_chapters_subset or markdown_file_to_include_stem in debug_chapters_subset:
-                    combined_book_markdown_lines.extend(lines_for_included_document(markdown_file_to_include_stem, pandoc_path, paths_and_titles_mapping))
+                    combined_book_markdown_lines.extend(lines_for_included_document(markdown_file_to_include_stem, pandoc_path, paths_and_titles_mapping, book_path))
                 continue
 
             # The line is something else, add it to the combined output unchanged
@@ -110,16 +110,16 @@ def book_markdown_file_stems_to_paths_and_titles_mapping(book_path):
     return dict([(path.stem, (path, title_from_first_heading_in_markdown_file(path))) for path in book_path.rglob('*.md')])
 
 
-def lines_for_included_document(markdown_file_stem, pandoc_path, paths_and_titles_mapping):
+def lines_for_included_document(markdown_file_stem, pandoc_path, paths_and_titles_mapping, book_path):
     markdown_file_path = paths_and_titles_mapping[markdown_file_stem][0]
     text = markdown_file_path.read_text()
     # TODO: remove this regex processing after non-well-formed HTML comments are in book sources (136551557)
     text = re.sub(r'<!--.+?-->', '', text, flags=re.DOTALL)
-    lines = rewrite_chapter_file_docc_markdown_for_pandoc(text.splitlines(keepends=False), paths_and_titles_mapping)
+    lines = rewrite_chapter_file_docc_markdown_for_pandoc(text.splitlines(keepends=False), paths_and_titles_mapping, book_path)
     return [r'\newpage{}'] + lines + ['']
 
 
-def rewrite_chapter_file_docc_markdown_for_pandoc(markdown_lines, paths_and_titles_mapping):
+def rewrite_chapter_file_docc_markdown_for_pandoc(markdown_lines, paths_and_titles_mapping, book_path):
     out = []
 
     state = 'start'
@@ -135,6 +135,8 @@ def rewrite_chapter_file_docc_markdown_for_pandoc(markdown_lines, paths_and_titl
                 # per-chapter markdown file by one level so they line up with
                 # the headings in the main file.
                 out.append('#' + match.group(1))
+            elif match := re.match(r'!\[\]\((\w+)\)', line):
+                out.append(rewrite_image_reference(match.group(1), book_path))                
             else:
                 out.append(line)
         elif state == 'start_definition_list':
@@ -158,6 +160,17 @@ def rewrite_chapter_file_docc_markdown_for_pandoc(markdown_lines, paths_and_titl
 
     return out
 
+
+def rewrite_image_reference(image_filename_prefix, book_path):
+    image_filename = Path(image_filename_prefix + '@2x.png')
+    image_path = book_path / 'TSPL.docc/Assets' / image_filename
+    output = subprocess.check_output(['file', os.fspath(image_path)], text=True)
+    match = re.search(r'PNG image data, (\d+) x \d+', output)
+    assert match
+    width = match.group(1)
+    scale_percentage = int(float(width) / 2 / 7.6)
+    return f'![]({image_filename}){{ width={scale_percentage}% }}'
+    
 
 def rewrite_docc_to_pandoc_markdown(line, paths_and_titles_mapping):
     # These need to be idempotent because of the pushback that can
