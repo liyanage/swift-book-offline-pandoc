@@ -123,20 +123,18 @@ def rewrite_chapter_file_docc_markdown_for_pandoc(markdown_lines, paths_and_titl
     out = []
 
     state = 'start'
-    while markdown_lines:
-        line = rewrite_docc_to_pandoc_markdown(markdown_lines.pop(0), paths_and_titles_mapping)
-        pushback = None
+    pushback = None
+    while markdown_lines or pushback:
+        if pushback:
+            line = pushback
+            pushback = None
+        else:
+            line = rewrite_docc_to_pandoc_markdown(markdown_lines.pop(0), paths_and_titles_mapping, book_path)
+
         if state == 'start':
             if match := re.match(r'- term (.+):', line):
                 out.append(match.group(1))
                 state = 'start_definition_list'
-            elif match := re.match(r'(#+ .+)', line):
-                # We need to shift down the heading levels for each included
-                # per-chapter markdown file by one level so they line up with
-                # the headings in the main file.
-                out.append('#' + match.group(1))
-            elif match := re.match(r'!\[\]\((\w+)\)', line):
-                out.append(rewrite_image_reference(match.group(1), book_path))                
             else:
                 out.append(line)
         elif state == 'start_definition_list':
@@ -155,29 +153,45 @@ def rewrite_chapter_file_docc_markdown_for_pandoc(markdown_lines, paths_and_titl
                 state = 'start'
                 pushback = line
 
-        if pushback:
-            markdown_lines.insert(0, pushback)
-
     return out
 
 
-def rewrite_image_reference(image_filename_prefix, book_path):
+# This function performs all rewriting that can be done within a single line.
+# More complex multi-line rewriting should happen in the state machine that this is called from.
+def rewrite_docc_to_pandoc_markdown(line, paths_and_titles_mapping, book_path):
+    line = rewrite_docc_to_pandoc_internal_references(line, paths_and_titles_mapping)
+    line = rewrite_docc_to_pandoc_optionality_marker(line)
+    line = rewrite_docc_to_pandoc_image_reference(line, book_path)
+    line = rewrite_docc_to_pandoc_heading_level_shift(line)
+    return line
+
+
+def rewrite_docc_to_pandoc_heading_level_shift(line):
+    if match := re.match(r'(#+ .+)', line):
+        # We need to shift down the heading levels for each included
+        # per-chapter markdown file by one level so they line up with
+        # the headings in the main file.
+        return '#' + match.group(1)
+    return line
+
+
+def rewrite_docc_to_pandoc_image_reference(line, book_path):    
+    if not (match := re.match(r'!\[([^\]]*)\]\(([\w-]+)\)', line)):
+        return line
+
+    caption, image_filename_prefix = match.groups()
     image_filename = Path(image_filename_prefix + '@2x.png')
     image_path = book_path / 'TSPL.docc/Assets' / image_filename
+    assert image_path.exists()
     output = subprocess.check_output(['file', os.fspath(image_path)], text=True)
     match = re.search(r'PNG image data, (\d+) x \d+', output)
     assert match
     width = match.group(1)
+    # Dividing the width by two and then dividing that by about 760
+    # gives us the scale factor that will match the image presentation
+    # in the online web version.
     scale_percentage = int(float(width) / 2 / 7.6)
-    return f'![]({image_filename}){{ width={scale_percentage}% }}'
-    
-
-def rewrite_docc_to_pandoc_markdown(line, paths_and_titles_mapping):
-    # These need to be idempotent because of the pushback that can
-    # happen for a line in the caller
-    line = rewrite_docc_to_pandoc_internal_references(line, paths_and_titles_mapping)
-    line = rewrite_docc_to_pandoc_optionality_marker(line)
-    return line
+    return f'![{caption}]({image_filename}){{ width={scale_percentage}% }}'
 
 
 def rewrite_docc_to_pandoc_internal_references(line, paths_and_titles_mapping):
