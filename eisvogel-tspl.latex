@@ -900,6 +900,9 @@ $endif$
 \usepackage{enumitem}
 \setlist[description]{style=nextline}
 
+%% This helps prevent long inline code symbols run into the margin and beyond the page
+\sloppy
+
 \begin{document}
 
 %%
