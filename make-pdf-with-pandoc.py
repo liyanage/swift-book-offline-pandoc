@@ -214,8 +214,11 @@ def rewrite_docc_to_pandoc_optionality_marker(line):
 
 def markdown_header_lines(book_path):
     first_level_1_heading = title_from_first_heading_in_markdown_file(book_path / 'TSPL.docc/The-Swift-Programming-Language.md')
-    git_tag = git_tag_or_ref_for_working_copy_path(book_path)
-    timestamp = subprocess.check_output(['git', '-C', os.fspath(book_path), 'for-each-ref', '--format', '%(taggerdate:short)', f'refs/tags/{git_tag}'], text=True).strip()
+    git_tag_or_ref = git_tag_or_ref_for_working_copy_path(book_path)
+    timestamp = subprocess.check_output(['git', '-C', os.fspath(book_path), 'for-each-ref', '--format', '%(taggerdate:short)', f'refs/tags/{git_tag_or_ref}'], text=True).strip()
+    if not timestamp:
+        timestamp = subprocess.check_output(['git', '-C', os.fspath(book_path), 'show', '--no-patch', '--pretty=format:%cs', git_tag_or_ref], text=True).strip()
+    assert len(timestamp)
 
     return textwrap.dedent(f'''
         ---
