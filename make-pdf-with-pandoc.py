@@ -51,7 +51,7 @@ def generate_pdf(book_path, pandoc_path, output_path, debug_latex):
            '--standalone',
            '--output', os.fspath(output_path),
            '--variable', 'linkcolor=[HTML]{de5d43}',
-           '--template', 'eisvogel-tspl',
+           '--template', 'tspl-pandoc-template',
            '--lua-filter', 'rewrite-retina-image-references.lua',
            '--highlight-style', 'tspl-code-highlight.theme',
           ] + output_options
