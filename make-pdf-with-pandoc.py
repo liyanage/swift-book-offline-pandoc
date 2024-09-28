@@ -113,8 +113,6 @@ def book_markdown_file_stems_to_paths_and_titles_mapping(book_path):
 def lines_for_included_document(markdown_file_stem, pandoc_path, paths_and_titles_mapping, book_path):
     markdown_file_path = paths_and_titles_mapping[markdown_file_stem][0]
     text = markdown_file_path.read_text()
-    # TODO: remove this regex processing after non-well-formed HTML comments are in book sources (136551557)
-    text = re.sub(r'<!--.+?-->', '', text, flags=re.DOTALL)
     lines = rewrite_chapter_file_docc_markdown_for_pandoc(text.splitlines(keepends=False), paths_and_titles_mapping, book_path)
     return [r'\newpage{}'] + lines + ['']
 
