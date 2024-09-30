@@ -41,9 +41,27 @@ def generate_output(book_path, pandoc_path, output_path_pdf, output_path_epub, d
     if debug_latex:
         option_sets.append(common_options + ['--to', 'latex', '--output', os.fspath(output_path_pdf.with_suffix('.tex'))])
     else:
-        epub_options = ['--to', 'epub', '--output', os.fspath(output_path_epub), '--css', 'tspl-epub.css']
+        epub_options = [
+            '--to', 'epub3',
+            '--toc',
+            '--split-level=2',
+            '--epub-embed-font=/Library/Fonts/SF-Pro-Text-Regular.otf',
+            '--epub-embed-font=/Library/Fonts/SF-Pro-Text-RegularItalic.otf',
+            '--epub-embed-font=/Library/Fonts/SF-Pro-Text-Bold.otf',
+            '--epub-embed-font=/Library/Fonts/SF-Pro-Text-BoldItalic.otf',
+            '--epub-embed-font=/Library/Fonts/SF-Mono.ttc',
+            '--css', 'tspl-epub.css',
+            '--output', os.fspath(output_path_epub)
+        ]
         option_sets.append(common_options + epub_options)
-        pdf_options = ['--to', 'pdf', '--pdf-engine', 'lualatex', '--output', os.fspath(output_path_pdf), '--variable', 'linkcolor=[HTML]{de5d43}', '--template', 'tspl-pandoc-template',]
+
+        pdf_options = [
+            '--to', 'pdf',
+            '--pdf-engine', 'lualatex',
+            '--variable', 'linkcolor=[HTML]{de5d43}',
+            '--template', 'tspl-pandoc-template',
+            '--output', os.fspath(output_path_pdf),
+        ]
         option_sets.append(common_options + pdf_options)
 
     for options in option_sets:

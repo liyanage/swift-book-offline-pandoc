@@ -1,4 +1,35 @@
 /* This defines styles and classes used in the book */
+@font-face {
+  font-family: "SF Pro Text";
+  font-style: normal;
+  font-weight: normal;
+  src:url("../fonts/SF-Pro-Text-Regular.otf");
+}
+@font-face {
+  font-family: "SF Pro Text";
+  font-style: italic;
+  font-weight: normal;
+  src:url("../fonts/SF-Pro-Text-RegularItalic.otf");
+}
+@font-face {
+  font-family: "SF Pro Text";
+  font-style: normal;
+  font-weight: bold;
+  src:url("../fonts/SF-Pro-Text-Bold.otf");
+}
+@font-face {
+  font-family: "SF Pro Text";
+  font-style: italic;
+  font-weight: bold;
+  src:url("../fonts/SF-Pro-Text-BoldItalic.otf");
+}
+@font-face {
+  font-family: "SF Mono";
+  font-style: normal;
+  font-weight: normal;
+  src:url("../fonts/SF-Mono.ttc");
+}
+
 @page {
   margin: 10px;
 }
@@ -17,7 +48,7 @@ ul, li, dl, dt, dd {
 }
 html {
   line-height: 1.2;
-  font-family: "SF Pro", serif;
+  font-family: "SF Pro Text", serif;
   color: #1a1a1a;
   background-color: #fdfdfd;
 }
@@ -90,9 +121,8 @@ blockquote {
   border-left: 6px solid rgb(102, 102, 102);
   border-radius: 4px;
 }
-
 code {
-  font-family: Menlo, monospace;
+  font-family: "SF Mono", monospace;
   font-size: 90%;
   margin: 0;
   hyphens: manual;
