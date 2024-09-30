@@ -28,7 +28,10 @@ p {
   orphans: 2;
 }
 a, a:visited {
-  color: #1a1a1a;
+  color: #de5d43;
+}
+a[href^=http], a:visited[href^=http]{
+  color: #3c87c6;
 }
 img {
   max-width: 100%;
