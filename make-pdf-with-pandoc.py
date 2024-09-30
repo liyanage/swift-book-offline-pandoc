@@ -15,15 +15,47 @@ def main():
     parser = argparse.ArgumentParser(description='Convert the Swift Language book to PDF using pandoc')
     parser.add_argument('book_path', type=Path, help='Path to directory containing the book source code (working copy of https://github.com/swiftlang/swift-book)')
     parser.add_argument('--pandoc-path', type=Path, help='Path to pandoc executable')
-    parser.add_argument('--output-path', type=Path, default='The-Swift-Programming-Language.pdf', help='PDF output path')
+    parser.add_argument('--output-path-pdf', type=Path, default='The-Swift-Programming-Language.pdf', help='PDF output path')
+    parser.add_argument('--output-path-epub', type=Path, default='The-Swift-Programming-Language.epub', help='ePUB output path')
     parser.add_argument('--debug-latex', action='store_true', help='Dump the latex intermediate code instead of the final PDF')
 
     args = parser.parse_args()
 
-    generate_pdf(args.book_path.expanduser(), args.pandoc_path.expanduser(), args.output_path.expanduser(), args.debug_latex)
+    generate_output(args.book_path.expanduser(), args.pandoc_path.expanduser(), args.output_path_pdf.expanduser(), args.output_path_epub.expanduser(), args.debug_latex)
 
 
-def generate_pdf(book_path, pandoc_path, output_path, debug_latex):
+def generate_output(book_path, pandoc_path, output_path_pdf, output_path_epub, debug_latex):
+    combined_markdown_path = combine_and_rewrite_markdown_files(book_path, pandoc_path)
+
+    common_options = [
+        '--from', 'markdown',
+        os.fspath(combined_markdown_path),
+        '--resource-path', os.fspath(book_path / 'TSPL.docc/Assets'),
+        '--highlight-style', 'tspl-code-highlight.theme',
+        '--standalone',
+        '--lua-filter', 'rewrite-retina-image-references.lua',
+    ]
+
+    option_sets = []
+
+    if debug_latex:
+        option_sets.append(common_options + ['--to', 'latex', '--output', os.fspath(output_path_pdf.with_suffix('.tex'))])
+    else:
+        epub_options = ['--to', 'epub', '--output', os.fspath(output_path_epub), '--css', 'tspl-epub.css']
+        option_sets.append(common_options + epub_options)
+        pdf_options = ['--to', 'pdf', '--pdf-engine', 'lualatex', '--output', os.fspath(output_path_pdf), '--variable', 'linkcolor=[HTML]{de5d43}', '--template', 'tspl-pandoc-template',]
+        option_sets.append(common_options + pdf_options)
+
+    for options in option_sets:
+        cmd = [os.fspath(pandoc_path)] + options
+        if subprocess.run(cmd, text=True).returncode:
+            print(f'pandoc command execution failure:\n{shlex.join(cmd)}')
+        else:
+            output_path = next(x for i, x in enumerate(options) if i and options[i - 1] == '--output')
+            print(f'Output written to {output_path}')
+
+
+def combine_and_rewrite_markdown_files(book_path, pandoc_path):
     # Preprocess the main md file that pulls in all the per-chapter files and shift up its headings by
     # two levels. We want to get the few headings ("Language Guide", "Language Reference" etc.) that introduce
     # related sets of chapters up to level 1, so that they become the toplevel heading structure visible in
@@ -37,29 +69,7 @@ def generate_pdf(book_path, pandoc_path, output_path, debug_latex):
     combined_book_markdown_lines = preprocess_main_file_markdown(book_path, pandoc_path, result.stdout)
     combined_markdown_path = Path('swiftbook-combined.md')
     combined_markdown_path.write_text('\n'.join(combined_book_markdown_lines))
-
-    if debug_latex:
-        output_path = output_path.with_suffix('.tex')
-        output_options = ['--to', 'latex']
-    else:
-        output_options = ['--to', 'pdf', '--pdf-engine', 'lualatex']
-
-    cmd = [os.fspath(pandoc_path),
-           '--from', 'markdown',
-           os.fspath(combined_markdown_path),
-           '--resource-path', os.fspath(book_path / 'TSPL.docc/Assets'),
-           '--standalone',
-           '--output', os.fspath(output_path),
-           '--variable', 'linkcolor=[HTML]{de5d43}',
-           '--template', 'tspl-pandoc-template',
-           '--lua-filter', 'rewrite-retina-image-references.lua',
-           '--highlight-style', 'tspl-code-highlight.theme',
-          ] + output_options
-
-    if subprocess.run(cmd, text=True).returncode:
-        print(f'pandoc command execution failure:\n{shlex.join(cmd)}')
-    else:
-        print(f'Output written to {output_path}')
+    return combined_markdown_path
 
 
 def preprocess_main_file_markdown(book_path, pandoc_path, main_markdown_file_text):
@@ -113,6 +123,8 @@ def book_markdown_file_stems_to_paths_and_titles_mapping(book_path):
 def lines_for_included_document(markdown_file_stem, pandoc_path, paths_and_titles_mapping, book_path):
     markdown_file_path = paths_and_titles_mapping[markdown_file_stem][0]
     text = markdown_file_path.read_text()
+    # TODO: remove this regex processing after non-well-formed HTML comments are in book sources (136551557)
+    text = re.sub(r'<!--.+?-->', '', text, flags=re.DOTALL)
     lines = rewrite_chapter_file_docc_markdown_for_pandoc(text.splitlines(keepends=False), paths_and_titles_mapping, book_path)
     return [r'\newpage{}'] + lines + ['']
 
