@@ -107,6 +107,8 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: bold;
   page-break-after: avoid;
   page-break-inside: avoid;
+  break-after: avoid-page;
+  break-after: avoid-column;
 }
 
 ol, ul {
