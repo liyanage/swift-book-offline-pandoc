@@ -159,27 +159,28 @@ def rewrite_chapter_file_docc_markdown_for_pandoc(markdown_lines, paths_and_titl
         else:
             line = rewrite_docc_to_pandoc_markdown(markdown_lines.pop(0), paths_and_titles_mapping, book_path)
 
-        if state == 'start':
-            if match := re.match(r'- term (.+):', line):
-                out.append(match.group(1))
-                state = 'start_definition_list'
-            else:
-                out.append(line)
-        elif state == 'start_definition_list':
-            pushback = line
-            out.append('')
-            state = 'reading_definition_list_definition_first_line'
-        elif state == 'reading_definition_list_definition_first_line':
-            out.append(f':    {line.lstrip()}')
-            state = 'reading_definition_list_definition'
-        elif state == 'reading_definition_list_definition':
-            if not line:
-                out.append('')
-            elif re.match(r'\s+', line) or not line:
-                out.append(f'    {line.lstrip()}')
-            else:
-                state = 'start'
+        match state:
+            case 'start':
+                if match := re.match(r'- term (.+):', line):
+                    out.append(match.group(1))
+                    state = 'start_definition_list'
+                else:
+                    out.append(line)
+            case 'start_definition_list':
                 pushback = line
+                out.append('')
+                state = 'reading_definition_list_definition_first_line'
+            case 'reading_definition_list_definition_first_line':
+                out.append(f':    {line.lstrip()}')
+                state = 'reading_definition_list_definition'
+            case 'reading_definition_list_definition':
+                if not line:
+                    out.append('')
+                elif re.match(r'\s+', line) or not line:
+                    out.append(f'    {line.lstrip()}')
+                else:
+                    state = 'start'
+                    pushback = line
 
     return out
 
