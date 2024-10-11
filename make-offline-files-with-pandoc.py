@@ -141,9 +141,12 @@ def book_markdown_file_stems_to_paths_and_titles_mapping(book_path):
 def lines_for_included_document(markdown_file_stem, pandoc_path, paths_and_titles_mapping, book_path):
     markdown_file_path = paths_and_titles_mapping[markdown_file_stem][0]
     text = markdown_file_path.read_text()
-    # TODO: remove this regex processing after non-well-formed HTML comments are in book sources (136551557)
+    # TODO: remove this regex processing after non-well-formed HTML comments
+    # (containing double dashes) are fixed in the upstream book sources
     text = re.sub(r'<!--.+?-->', '', text, flags=re.DOTALL)
     lines = rewrite_chapter_file_docc_markdown_for_pandoc(text.splitlines(keepends=False), paths_and_titles_mapping, book_path)
+    # This enforces a page break after a chapter for PDF output and 
+    # it doesn't seem to negatively impact the ePUB output.
     return [r'\newpage{}'] + lines + ['']
 
 
@@ -157,7 +160,7 @@ def rewrite_chapter_file_docc_markdown_for_pandoc(markdown_lines, paths_and_titl
             line = pushback
             pushback = None
         else:
-            line = rewrite_docc_to_pandoc_markdown(markdown_lines.pop(0), paths_and_titles_mapping, book_path)
+            line = rewrite_docc_markdown_line_for_pandoc(markdown_lines.pop(0), paths_and_titles_mapping, book_path)
 
         match state:
             case 'start':
@@ -187,15 +190,15 @@ def rewrite_chapter_file_docc_markdown_for_pandoc(markdown_lines, paths_and_titl
 
 # This function performs all rewriting that can be done within a single line.
 # More complex multi-line rewriting should happen in the state machine that this is called from.
-def rewrite_docc_to_pandoc_markdown(line, paths_and_titles_mapping, book_path):
-    line = rewrite_docc_to_pandoc_internal_references(line, paths_and_titles_mapping)
-    line = rewrite_docc_to_pandoc_optionality_marker(line)
-    line = rewrite_docc_to_pandoc_image_reference(line, book_path)
-    line = rewrite_docc_to_pandoc_heading_level_shift(line)
+def rewrite_docc_markdown_line_for_pandoc(line, paths_and_titles_mapping, book_path):
+    line = rewrite_docc_markdown_line_for_pandoc_internal_references(line, paths_and_titles_mapping)
+    line = rewrite_docc_markdown_line_for_pandoc_optionality_marker(line)
+    line = rewrite_docc_markdown_line_for_pandoc_image_reference(line, book_path)
+    line = rewrite_docc_markdown_line_for_pandoc_heading_level_shift(line)
     return line
 
 
-def rewrite_docc_to_pandoc_heading_level_shift(line):
+def rewrite_docc_markdown_line_for_pandoc_heading_level_shift(line):
     if match := re.match(r'(#+ .+)', line):
         # We need to shift down the heading levels for each included
         # per-chapter markdown file by one level so they line up with
@@ -204,7 +207,7 @@ def rewrite_docc_to_pandoc_heading_level_shift(line):
     return line
 
 
-def rewrite_docc_to_pandoc_image_reference(line, book_path):    
+def rewrite_docc_markdown_line_for_pandoc_image_reference(line, book_path):    
     if not (match := re.match(r'!\[([^\]]*)\]\(([\w-]+)\)', line)):
         return line
 
@@ -223,7 +226,7 @@ def rewrite_docc_to_pandoc_image_reference(line, book_path):
     return f'![{caption}]({image_filename}){{ width={scale_percentage}% }}'
 
 
-def rewrite_docc_to_pandoc_internal_references(line, paths_and_titles_mapping):
+def rewrite_docc_markdown_line_for_pandoc_internal_references(line, paths_and_titles_mapping):
     def pandoc_markdown_reference_for_docc_reference_match(match):
         text = match.group(1)
         if '#' in text:
@@ -239,7 +242,9 @@ def rewrite_docc_to_pandoc_internal_references(line, paths_and_titles_mapping):
     return line
 
 
-def rewrite_docc_to_pandoc_optionality_marker(line):
+def rewrite_docc_markdown_line_for_pandoc_optionality_marker(line):
+    # This fixes the markup used for ? optionality
+    # markers used in grammar blocks
     return re.sub(r'(\*{1,2})_\?_', r'?\1', line)
 
 
