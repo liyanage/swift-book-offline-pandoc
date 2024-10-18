@@ -151,7 +151,7 @@ def lines_for_included_document(markdown_file_stem, paths_and_titles_mapping, bo
     # TODO: remove this regex processing after non-well-formed HTML comments
     # (containing double dashes) are fixed in the upstream book sources
     text = re.sub(r'<!--.+?-->', '', text, flags=re.DOTALL)
-    lines = rewrite_docc_markdown_chapter_file_for_pandoc(text.splitlines(keepends=False), paths_and_titles_mapping, book_path)
+    lines = rewrite_docc_markdown_chapter_file_for_pandoc(text.splitlines(), paths_and_titles_mapping, book_path)
     # This enforces a page break after a chapter for PDF output and 
     # it doesn't seem to negatively impact the ePUB output.
     return [r'\newpage{}'] + lines + ['']
@@ -298,7 +298,7 @@ def markdown_header_lines(book_path):
         listings-no-page-break: false
         papersize: letter
         ---
-    ''').splitlines(keepends=False)
+    ''').splitlines()
 
 
 def title_from_first_heading_in_markdown_file(path):
@@ -308,12 +308,12 @@ def title_from_first_heading_in_markdown_file(path):
 
 def git_tag_or_ref_for_working_copy_path(working_copy_path):
     output = subprocess.check_output(['git', '-C', os.fspath(working_copy_path), 'tag', '--points-at', 'HEAD'], text=True)
-    tags = [l for l in output.splitlines(keepends=False) if l]
+    tags = [l for l in output.splitlines() if l]
     if tags:
         return tags[0]
 
     output = subprocess.check_output(['git', '-C', os.fspath(working_copy_path), 'symbolic-ref', '--short', 'HEAD'], text=True)
-    refs = [l for l in output.splitlines(keepends=False) if l]
+    refs = [l for l in output.splitlines() if l]
     return refs[0]
 
 
