@@ -9,6 +9,7 @@ import logging
 import textwrap
 import subprocess
 from pathlib import Path
+from enum import Enum
 
 
 def main():
@@ -112,25 +113,30 @@ def preprocess_main_file_markdown(book_path, pandoc_path, main_markdown_file_tex
     # there will be some paragraphs that were formerly headings that we no longer need.
     # This state machine skips over that content until we reach the first heading and then
     # starts processing the DocC <doc:... include directives.
-    state = 'waiting_for_first_heading'
-    for line in main_markdown_file_text.splitlines(keepends=False):
-        if state == 'waiting_for_first_heading':
-            if line.startswith('# '):
-                state = 'processing_document_includes'
-                combined_book_markdown_lines.append(line)                
-        elif state == 'processing_document_includes':
-            if match := re.match(r'^-\s*`<doc:(\w+)>`.*$', line):
-                # We found a chapter include directive, process and add
-                # the lines of the referenced file at this point
-                markdown_file_to_include_stem = match.group(1)
-                if not debug_chapters_subset or markdown_file_to_include_stem in debug_chapters_subset:
-                    combined_book_markdown_lines.extend(lines_for_included_document(markdown_file_to_include_stem, pandoc_path, paths_and_titles_mapping, book_path))
-                continue
+    class ParserState(Enum):
+        WAITING_FOR_FIRST_HEADING = 1
+        PROCESSING_DOCUMENT_INCLUDES = 2
 
-            # The line is something else, add it to the combined output unchanged
-            if line.startswith('# '):
-                combined_book_markdown_lines.append(r'\newpage{}')
-            combined_book_markdown_lines.append(line)
+    state = ParserState.WAITING_FOR_FIRST_HEADING
+    for line in main_markdown_file_text.splitlines():
+        match state:
+            case ParserState.WAITING_FOR_FIRST_HEADING:
+                if line.startswith('# '):
+                    state = ParserState.PROCESSING_DOCUMENT_INCLUDES
+                    combined_book_markdown_lines.append(line)                
+            case ParserState.PROCESSING_DOCUMENT_INCLUDES:
+                if match := re.match(r'^-\s*`<doc:(\w+)>`.*$', line):
+                    # We found a chapter include directive, process and add
+                    # the lines of the referenced file at this point
+                    markdown_file_to_include_stem = match.group(1)
+                    if not debug_chapters_subset or markdown_file_to_include_stem in debug_chapters_subset:
+                        combined_book_markdown_lines.extend(lines_for_included_document(markdown_file_to_include_stem, paths_and_titles_mapping, book_path))
+                    continue
+
+                # The line is something else, add it to the combined output unchanged
+                if line.startswith('# '):
+                    combined_book_markdown_lines.append(r'\newpage{}')
+                combined_book_markdown_lines.append(line)
 
     return combined_book_markdown_lines
 
@@ -139,7 +145,7 @@ def book_markdown_file_stems_to_paths_and_titles_mapping(book_path):
     return dict([(path.stem, (path, title_from_first_heading_in_markdown_file(path))) for path in book_path.rglob('*.md')])
 
 
-def lines_for_included_document(markdown_file_stem, pandoc_path, paths_and_titles_mapping, book_path):
+def lines_for_included_document(markdown_file_stem, paths_and_titles_mapping, book_path):
     markdown_file_path = paths_and_titles_mapping[markdown_file_stem][0]
     text = markdown_file_path.read_text()
     # TODO: remove this regex processing after non-well-formed HTML comments
@@ -154,7 +160,13 @@ def lines_for_included_document(markdown_file_stem, pandoc_path, paths_and_title
 def rewrite_docc_markdown_chapter_file_for_pandoc(markdown_lines, paths_and_titles_mapping, book_path):
     out = []
 
-    state = 'start'
+    class ParserState(Enum):
+        START = 1
+        START_DEFINITION_LIST = 2
+        READING_DEFINITION_LIST_DEFINITION_FIRST_LINE = 3
+        READING_DEFINITION_LIST_DEFINITION = 4
+
+    state = ParserState.START
     pushback = None
     while markdown_lines or pushback:
         if pushback:
@@ -164,26 +176,26 @@ def rewrite_docc_markdown_chapter_file_for_pandoc(markdown_lines, paths_and_titl
             line = rewrite_docc_markdown_line_for_pandoc(markdown_lines.pop(0), paths_and_titles_mapping, book_path)
 
         match state:
-            case 'start':
+            case ParserState.START:
                 if match := re.match(r'- term (.+):', line):
                     out.append(match.group(1))
-                    state = 'start_definition_list'
+                    state = ParserState.START_DEFINITION_LIST
                 else:
                     out.append(line)
-            case 'start_definition_list':
+            case ParserState.START_DEFINITION_LIST:
                 pushback = line
                 out.append('')
-                state = 'reading_definition_list_definition_first_line'
-            case 'reading_definition_list_definition_first_line':
+                state = ParserState.READING_DEFINITION_LIST_DEFINITION_FIRST_LINE
+            case ParserState.READING_DEFINITION_LIST_DEFINITION_FIRST_LINE:
                 out.append(f':    {line.lstrip()}')
-                state = 'reading_definition_list_definition'
-            case 'reading_definition_list_definition':
+                state = ParserState.READING_DEFINITION_LIST_DEFINITION
+            case ParserState.READING_DEFINITION_LIST_DEFINITION:
                 if not line:
                     out.append('')
                 elif re.match(r'\s+', line) or not line:
                     out.append(f'    {line.lstrip()}')
                 else:
-                    state = 'start'
+                    state = ParserState.START
                     pushback = line
 
     return out
