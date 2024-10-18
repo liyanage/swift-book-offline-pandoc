@@ -257,7 +257,7 @@ def markdown_header_lines(book_path):
         timestamp = subprocess.check_output(['git', '-C', os.fspath(book_path), 'show', '--no-patch', '--pretty=format:%cs', git_tag_or_ref], text=True).strip()
     assert len(timestamp)
 
-    return textwrap.dedent(f'''
+    return textwrap.dedent(f'''\
         ---
         title: {first_level_1_heading}
         date: "{timestamp}"
@@ -291,7 +291,7 @@ def markdown_header_lines(book_path):
 
 def title_from_first_heading_in_markdown_file(path):
     with path.open() as f:
-        return next((line[2:] for line in f if line.startswith('# ')), None)
+        return next((line[2:].strip() for line in f if line.startswith('# ')), None)
 
 
 def git_tag_or_ref_for_working_copy_path(working_copy_path):
