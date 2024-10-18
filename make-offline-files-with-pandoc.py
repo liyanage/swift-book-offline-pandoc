@@ -144,13 +144,13 @@ def lines_for_included_document(markdown_file_stem, pandoc_path, paths_and_title
     # TODO: remove this regex processing after non-well-formed HTML comments
     # (containing double dashes) are fixed in the upstream book sources
     text = re.sub(r'<!--.+?-->', '', text, flags=re.DOTALL)
-    lines = rewrite_chapter_file_docc_markdown_for_pandoc(text.splitlines(keepends=False), paths_and_titles_mapping, book_path)
+    lines = rewrite_docc_markdown_chapter_file_for_pandoc(text.splitlines(keepends=False), paths_and_titles_mapping, book_path)
     # This enforces a page break after a chapter for PDF output and 
     # it doesn't seem to negatively impact the ePUB output.
     return [r'\newpage{}'] + lines + ['']
 
 
-def rewrite_chapter_file_docc_markdown_for_pandoc(markdown_lines, paths_and_titles_mapping, book_path):
+def rewrite_docc_markdown_chapter_file_for_pandoc(markdown_lines, paths_and_titles_mapping, book_path):
     out = []
 
     state = 'start'
