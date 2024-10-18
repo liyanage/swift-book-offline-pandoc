@@ -80,11 +80,12 @@ def combine_and_rewrite_markdown_files(book_path, pandoc_path):
     # the table of contents.
     cmd = [os.fspath(pandoc_path), '--from', 'markdown', '--to', 'markdown', os.fspath(book_path / 'TSPL.docc/The-Swift-Programming-Language.md'), '--shift-heading-level-by=-2']
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    main_file_markdown_text = result.stdout
 
     # This preprocessing step of the main file performs the inclusion of all referenced
     # per-chapter files, resulting in one large markdown file that contains all content,
     # which we then run through pandoc.
-    combined_book_markdown_lines = preprocess_main_file_markdown(book_path, pandoc_path, result.stdout)
+    combined_book_markdown_lines = preprocess_main_file_markdown(book_path, pandoc_path, main_file_markdown_text)
     combined_markdown_path = Path('swiftbook-combined.md')
     combined_markdown_path.write_text('\n'.join(combined_book_markdown_lines))
     return combined_markdown_path
