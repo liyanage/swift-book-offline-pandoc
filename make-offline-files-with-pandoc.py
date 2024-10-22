@@ -19,14 +19,19 @@ def main():
     parser.add_argument('--output-path-pdf', type=Path, default='The-Swift-Programming-Language.pdf', help='PDF output path')
     parser.add_argument('--output-path-epub', type=Path, default='The-Swift-Programming-Language.epub', help='ePUB output path')
     parser.add_argument('--debug-latex', action='store_true', help='Dump the latex intermediate code instead of the final PDF')
+    parser.add_argument('--preprocess-markdown-only', action='store_true', help='Just preprocess the markdown content, don\'t produce final output')
 
     args = parser.parse_args()
 
-    generate_output(args.book_path.expanduser(), args.pandoc_path.expanduser(), args.output_path_pdf.expanduser(), args.output_path_epub.expanduser(), args.debug_latex)
+    generate_output(args.book_path.expanduser(), args.pandoc_path.expanduser(), args.output_path_pdf.expanduser(), args.output_path_epub.expanduser(), args.debug_latex, args.preprocess_markdown_only)
 
 
-def generate_output(book_path, pandoc_path, output_path_pdf, output_path_epub, debug_latex):
+def generate_output(book_path, pandoc_path, output_path_pdf, output_path_epub, debug_latex, preprocess_markdown_only):
     combined_markdown_path = combine_and_rewrite_markdown_files(book_path, pandoc_path)
+    print(f'Preprocessed Markdown content written to {combined_markdown_path}')
+
+    if preprocess_markdown_only:
+        return
 
     common_options = [
         '--from', 'markdown',

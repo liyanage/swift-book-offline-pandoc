@@ -14,6 +14,7 @@ enum ConversionError: Error {
     case unknownFileReference(name: String)
 }
 
+
 @main
 struct swift_book_offline_pandoc: AsyncParsableCommand {
 
@@ -29,16 +30,34 @@ struct swift_book_offline_pandoc: AsyncParsableCommand {
     @Option(help: "The output path for the ePUB file")
     var outputPathEpub: String = "The-Swift-Programming-Language.epub"
 
+    @Flag(help: "Just preprocess the markdown content, don't produce final output")
+    var preprocessMarkdownOnly: Bool = false
+
     func run() async throws {
         let bookURL = NSURL(fileURLWithPath: (bookPath as NSString).expandingTildeInPath as String)
         let pandocURL = NSURL(fileURLWithPath: (pandocPath as NSString).expandingTildeInPath as String)
         let outputURLPdf = NSURL(fileURLWithPath: (outputPathPdf as NSString).expandingTildeInPath as String)
         let outputURLEpub = NSURL(fileURLWithPath: (outputPathEpub as NSString).expandingTildeInPath as String)
-        try await generateOutput(bookURL: bookURL as URL, pandocURL: pandocURL as URL, outputURLPdf: outputURLPdf as URL, outputURLEpub: outputURLEpub as URL)
-    }
 
-    func generateOutput(bookURL: URL, pandocURL: URL, outputURLPdf: URL, outputURLEpub: URL) async throws {
+        try await BookConverter().generateOutput(
+            bookURL: bookURL as URL,
+            pandocURL: pandocURL as URL,
+            outputURLPdf: outputURLPdf as URL,
+            outputURLEpub: outputURLEpub as URL,
+            preprocessMarkdownOnly: preprocessMarkdownOnly)
+    }
+}
+
+
+struct BookConverter {
+
+    func generateOutput(bookURL: URL, pandocURL: URL, outputURLPdf: URL, outputURLEpub: URL, preprocessMarkdownOnly: Bool) async throws {
         let combinedMarkdownURL = try await combineAndRewriteMarkdownFiles(bookURL: bookURL, pandocURL: pandocURL)
+        print("Preprocessed Markdown content written to \(combinedMarkdownURL.path())")
+
+        if preprocessMarkdownOnly {
+            return
+        }
 
         let commonOptions = [
             "--from", "markdown",
@@ -61,7 +80,7 @@ struct swift_book_offline_pandoc: AsyncParsableCommand {
             "--epub-embed-font=/Library/Fonts/SF-Pro-Text-BoldItalic.otf",
             "--epub-embed-font=/Library/Fonts/SF-Mono.ttc",
             "--css", "tspl-epub.css",
-            "--output", outputPathEpub,
+            "--output", outputURLEpub.path(),
         ]
         optionSets.append(commonOptions + ePubOptions)
 
@@ -70,12 +89,12 @@ struct swift_book_offline_pandoc: AsyncParsableCommand {
             "--pdf-engine", "lualatex",
             "--variable", "linkcolor=[HTML]{de5d43}",
             "--template", "tspl-pandoc-template",
-            "--output", outputPathPdf,
+            "--output", outputURLPdf.path(),
         ]
         optionSets.append(commonOptions + pdfOptions)
 
         for options in optionSets {
-            let output = try stdoutForSubprocess(executablePath: pandocURL.path(), arguments: options)
+            try stdoutForSubprocess(executablePath: pandocURL.path(), arguments: options)
         }
     }
 
@@ -97,6 +116,7 @@ struct swift_book_offline_pandoc: AsyncParsableCommand {
         return combinedMarkdownURL
     }
 
+    private let docInclusionRegex = /^-\s*`<doc:(\w+)>`.*$/
     func preprocessMainFileMarkdown(bookURL: URL, pandocURL: URL, mainFileMarkdownText: String) async throws -> [String] {
         // The DocC inclusion directives as well as cross-references refer to the per-chapter
         // files with the "stem", the filename without extension. We need to be able to map
@@ -129,7 +149,7 @@ struct swift_book_offline_pandoc: AsyncParsableCommand {
                         combinedBookMarkdownLines.append(line)
                     }
                 case .processingDocumentIncludes:
-                    if let match = line.firstMatch(of: /^-\s*`<doc:(\w+)>`.*$/) {
+                    if let match = line.firstMatch(of: docInclusionRegex) {
                         // We found a chapter include directive, process and add
                         // the lines of the referenced file at this point
                         let markdownFileToIncludeStem = String(match.1)
@@ -165,6 +185,8 @@ struct swift_book_offline_pandoc: AsyncParsableCommand {
         return ["\\newpage{}"] + lines + [""]
     }
 
+    private let definitionListRegex = /^- term (.+):/
+    private let whitespaceLineStartRegex = /^\s+/
     func rewriteDoccMarkdownChapterFileForPandoc(markdownLines: [String], urlsAndTitlesMapping: FileStemsToURLsAndTitlesMapping, bookURL: URL) throws -> [String] {
 
         enum ParserState {        
@@ -190,7 +212,7 @@ struct swift_book_offline_pandoc: AsyncParsableCommand {
 
             switch state {
                 case .start:
-                    if let match = line.firstMatch(of: /^- term (.+):/) {
+                    if let match = line.firstMatch(of: definitionListRegex) {
                         out.append(String(match.1))
                         state = .startDefinitionList
                     } else {
@@ -206,7 +228,7 @@ struct swift_book_offline_pandoc: AsyncParsableCommand {
                 case .readingDefinitionListDefinition:
                     if line.isEmpty {
                         out.append("")
-                    } else if line.contains(/^\s+/) {
+                    } else if line.contains(whitespaceLineStartRegex) {
                         out.append("    \(line.trimmingCharacters(in: .whitespaces))")
                     } else {
                         state = .start
@@ -228,8 +250,9 @@ struct swift_book_offline_pandoc: AsyncParsableCommand {
         return line
     }
 
+    private let internalReferenceRegex = /<doc:([\w#-]+)>/
     func rewriteDoccMarkdownLineForPandocInternalReferences(_ line: String, urlsAndTitlesMapping: FileStemsToURLsAndTitlesMapping) -> String {
-        return line.replacing(/<doc:([\w#-]+)>/) { match     in
+        return line.replacing(internalReferenceRegex) { match     in
             let reference = String(match.1)
             var humanReadableLabel: String
             if reference.contains("#") {
@@ -244,16 +267,19 @@ struct swift_book_offline_pandoc: AsyncParsableCommand {
         }
     }
 
+    private let optionalityMarkerRegex = /(\*{1,2})_\?_/
     func rewriteDoccMarkdownLineForPandocOptionalityMarker(_ line: String) -> String {
         // This fixes the markup used for ? optionality
         // markers used in grammar blocks
-        return line.replacing(/(\*{1,2})_\?_/) { match in 
+        return line.replacing(optionalityMarkerRegex) { match in 
             return "?\(match.1)"
         }
     }
 
+    private let imageReferenceRegex = /!\[([^\]]*)\]\(([\w-]+)\)/
+    private let fileOutputRegex = /PNG image data, (\d+) x \d+/
     func rewriteDoccMarkdownLineForPandocImageReference(_ line: String, bookURL: URL) throws -> String {
-        guard let match: Regex<Regex<(Substring, Substring, Substring)>.RegexOutput>.Match = line.firstMatch(of: /!\[([^\]]*)\]\(([\w-]+)\)/) else {
+        guard let match: Regex<Regex<(Substring, Substring, Substring)>.RegexOutput>.Match = line.firstMatch(of: imageReferenceRegex) else {
             return line
         }
         let (caption, imageFilenamePrefix) = (match.1, match.2)
@@ -262,7 +288,7 @@ struct swift_book_offline_pandoc: AsyncParsableCommand {
         assert(FileManager().fileExists(atPath: imageURL.path()))
 
         let output = try stdoutForSubprocess(executablePath: "/usr/bin/file", arguments: [imageURL.path()])
-        let fileCommandOutputMatch = output.firstMatch(of: /PNG image data, (\d+) x \d+/)!
+        let fileCommandOutputMatch = output.firstMatch(of: fileOutputRegex)!
         let width = Float(fileCommandOutputMatch.1)!
         // Dividing the width by two and then dividing that by about 760
         // gives us the scale factor that will match the image presentation
@@ -271,8 +297,10 @@ struct swift_book_offline_pandoc: AsyncParsableCommand {
         return "![\(caption)](\(imageFilename)){ width=\(scalePercentage)% }"
     }    
 
+
+    private let headingRegex = /^(#+ .+)/
     func rewriteDoccMarkdownLineForPandocHeadingLevelShift(_ line: String) -> String {
-        if let match = line.firstMatch(of: /^(#+ .+)/) {
+        if let match = line.firstMatch(of: headingRegex) {
             // We need to shift down the heading levels for each included
             // per-chapter markdown file by one level so they line up with
             // the headings in the main file.
