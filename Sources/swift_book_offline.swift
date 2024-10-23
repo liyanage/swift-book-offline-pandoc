@@ -16,7 +16,7 @@ enum ConversionError: Error {
 
 
 @main
-struct swift_book_offline_pandoc: AsyncParsableCommand {
+struct swift_book_offline: AsyncParsableCommand {
 
     @Argument(help: "The path to the swift-book repository working copy")
     var bookPath: String
