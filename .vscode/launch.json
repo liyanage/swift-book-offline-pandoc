@@ -1,0 +1,46 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug make-offline-files.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/make-offline-files.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--pandoc-path",
+                "~/Downloads/pandoc-3.4-arm64/bin/pandoc",
+                "~/git/swift-book"
+            ]
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [
+                "--pandoc-path",
+                "~/Downloads/pandoc-3.4-arm64/bin/pandoc",
+                "~/git/swift-book"
+            ],
+            "cwd": "${workspaceFolder}",
+            "name": "Debug swift-book-offline",
+            "program": "${workspaceFolder}/.build/debug/swift-book-offline",
+            "preLaunchTask": "swift: Build Debug swift-book-offline"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [
+                "--pandoc-path",
+                "~/Downloads/pandoc-3.4-arm64/bin/pandoc",
+                "~/git/swift-book"
+            ],
+            "cwd": "${workspaceFolder}",
+            "name": "Release swift-book-offline",
+            "program": "${workspaceFolder}/.build/release/swift-book-offline",
+            "preLaunchTask": "swift: Build Release swift-book-offline"
+        },
+    ]
+}
