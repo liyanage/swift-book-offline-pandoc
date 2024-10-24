@@ -91,13 +91,13 @@ def combine_and_rewrite_markdown_files(book_path, pandoc_path):
     # This preprocessing step of the main file performs the inclusion of all referenced
     # per-chapter files, resulting in one large markdown file that contains all content,
     # which we then run through pandoc.
-    combined_book_markdown_lines = preprocess_main_file_markdown(book_path, pandoc_path, main_file_markdown_text)
+    combined_book_markdown_lines = preprocess_main_file_markdown(book_path, main_file_markdown_text)
     combined_markdown_path = Path('swiftbook-combined.md')
     combined_markdown_path.write_text('\n'.join(combined_book_markdown_lines))
     return combined_markdown_path
 
 
-def preprocess_main_file_markdown(book_path, pandoc_path, main_markdown_file_text):
+def preprocess_main_file_markdown(book_path, main_markdown_file_text):
     # The DocC inclusion directives as well as cross-references refer to the per-chapter
     # files with the "stem", the filename without extension. We need to be able to map
     # from those stems to the full file paths and also to the human-readable document
