@@ -311,7 +311,7 @@ struct BookConverter {
 
     func markdownHeaderLines(bookURL: URL) async throws -> [String] {
         let firstLevel1Heading = try await titleFromFirstLevel1HeadingInMarkdownFile(markdownFileURL: bookURL.appending(component: "TSPL.docc/The-Swift-Programming-Language.md"))!
-        let (gitTagOrRef, timestamp) = try gitTagOrRefForBookWorkingCopyURL(bookURL: bookURL)!
+        let (_, timestamp) = try gitTagOrRefForBookWorkingCopyURL(bookURL: bookURL)!
 
         return splitLines("""
             ---
@@ -392,6 +392,7 @@ struct BookConverter {
         return nil;
     }
 
+    @discardableResult
     func stdoutForSubprocess(executablePath: String, arguments: [String]) throws -> String {
         let subProcess = Process()
         let subProcessPipe = Pipe()
