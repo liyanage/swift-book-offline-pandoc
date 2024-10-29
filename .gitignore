@@ -2,3 +2,5 @@ The-Swift-Programming-Language*
 swiftbook-combined*.md
 *.pdf
 .build
+!.vscode
+.vscode/settings.json
