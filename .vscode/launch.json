@@ -24,9 +24,9 @@
                 "~/Downloads/pandoc-3.4-arm64/bin/pandoc",
                 "~/git/swift-book"
             ],
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder:swift-book-offline}",
             "name": "Debug swift-book-offline",
-            "program": "${workspaceFolder}/.build/debug/swift-book-offline",
+            "program": "${workspaceFolder:swift-book-offline}/.build/debug/swift-book-offline",
             "preLaunchTask": "swift: Build Debug swift-book-offline"
         },
         {
@@ -37,10 +37,10 @@
                 "~/Downloads/pandoc-3.4-arm64/bin/pandoc",
                 "~/git/swift-book"
             ],
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder:swift-book-offline}",
             "name": "Release swift-book-offline",
-            "program": "${workspaceFolder}/.build/release/swift-book-offline",
+            "program": "${workspaceFolder:swift-book-offline}/.build/release/swift-book-offline",
             "preLaunchTask": "swift: Build Release swift-book-offline"
-        },
+        }
     ]
 }
