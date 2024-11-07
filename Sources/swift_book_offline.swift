@@ -8,7 +8,9 @@ import ArgumentParser
 import Foundation
 import OSLog
 
-typealias FileStemsToURLsAndTitlesMapping = [String: (url: URL, title: String?)]
+typealias FilenameStemsToURLsAndTitlesMapping = [String: (url: URL, title: String?)]
+typealias FilenameStemAndLines = (filenameStem: String, lines: [String])
+typealias FilenameStemToLinesMapping = [String: [String]]
 
 enum ConversionError: Error {
     case unknownFileReference(name: String)
@@ -174,8 +176,8 @@ struct BookConverter {
         return combinedBookMarkdownLines
     }
     
-    fileprivate func chapterFilenameStemToPreprocessedLinesMap(_ mainFileLines: Array<String>.SubSequence, _ urlsAndTitlesMapping: FileStemsToURLsAndTitlesMapping, _ bookURL: URL) async throws -> [String : [String]] {
-        return try await withThrowingTaskGroup(of: (filenameStem: String, lines: [String]).self) { group in
+    fileprivate func chapterFilenameStemToPreprocessedLinesMap(_ mainFileLines: Array<String>.SubSequence, _ urlsAndTitlesMapping: FilenameStemsToURLsAndTitlesMapping, _ bookURL: URL) async throws -> FilenameStemToLinesMapping {
+        return try await withThrowingTaskGroup(of: FilenameStemAndLines.self) { group in
             for line in mainFileLines {
                 guard let match = line.firstMatch(of: docInclusionRegex)  else {
                     continue
@@ -186,15 +188,14 @@ struct BookConverter {
                     return (markdownFileToIncludeStem, try linesForIncludedDocument(markdownFileStem: markdownFileToIncludeStem, urlsAndTitlesMapping: urlsAndTitlesMapping, bookURL: bookURL))
                 }
             }
-            var results: [String: [String]] = [:]
-            for try await result in group {
-                results[result.filenameStem] = result.lines
+
+            return try await group.reduce(into: FilenameStemToLinesMapping()) { partialResult, stemAndLines in
+                partialResult[stemAndLines.filenameStem] = stemAndLines.lines
             }
-            return results
         }
     }
     
-    func linesForIncludedDocument(markdownFileStem: String, urlsAndTitlesMapping: FileStemsToURLsAndTitlesMapping, bookURL: URL) throws -> [String] {
+    func linesForIncludedDocument(markdownFileStem: String, urlsAndTitlesMapping: FilenameStemsToURLsAndTitlesMapping, bookURL: URL) throws -> [String] {
         guard let markdownFileURL = urlsAndTitlesMapping[markdownFileStem]?.url else {
             throw ConversionError.unknownFileReference(name: markdownFileStem)
         }
@@ -213,7 +214,7 @@ struct BookConverter {
 
     private let definitionListRegex = /^- term (.+):/
     private let whitespaceLineStartRegex = /^\s+/
-    func rewriteDoccMarkdownChapterFileForPandoc(markdownLines: [String], urlsAndTitlesMapping: FileStemsToURLsAndTitlesMapping, bookURL: URL) throws -> [String] {
+    func rewriteDoccMarkdownChapterFileForPandoc(markdownLines: [String], urlsAndTitlesMapping: FilenameStemsToURLsAndTitlesMapping, bookURL: URL) throws -> [String] {
 
         enum ParserState {        
             case start
@@ -268,7 +269,7 @@ struct BookConverter {
 
     // This function performs all rewriting that can be done within a single line.
     // More complex multi-line rewriting should happen in the state machine that this is called from.
-    func rewriteDoccMarkdownLineForPandoc(_ line: String, urlsAndTitlesMapping: FileStemsToURLsAndTitlesMapping, bookURL: URL) throws -> String {
+    func rewriteDoccMarkdownLineForPandoc(_ line: String, urlsAndTitlesMapping: FilenameStemsToURLsAndTitlesMapping, bookURL: URL) throws -> String {
         var line = rewriteDoccMarkdownLineForPandocInternalReferences(line, urlsAndTitlesMapping: urlsAndTitlesMapping)
         line = rewriteDoccMarkdownLineForPandocOptionalityMarker(line)
         line = try rewriteDoccMarkdownLineForPandocImageReference(line, bookURL: bookURL)
@@ -277,7 +278,7 @@ struct BookConverter {
     }
 
     private let internalReferenceRegex = /<doc:([\w#-]+)>/
-    func rewriteDoccMarkdownLineForPandocInternalReferences(_ line: String, urlsAndTitlesMapping: FileStemsToURLsAndTitlesMapping) -> String {
+    func rewriteDoccMarkdownLineForPandocInternalReferences(_ line: String, urlsAndTitlesMapping: FilenameStemsToURLsAndTitlesMapping) -> String {
         return line.replacing(internalReferenceRegex) { match     in
             let reference = String(match.1)
             var humanReadableLabel: String
@@ -393,8 +394,8 @@ struct BookConverter {
         return nil
     }
 
-    func bookMarkdownFileStemsToURLsAndTitlesMapping(bookURL: URL) async throws -> FileStemsToURLsAndTitlesMapping {
-        var mapping = FileStemsToURLsAndTitlesMapping()
+    func bookMarkdownFileStemsToURLsAndTitlesMapping(bookURL: URL) async throws -> FilenameStemsToURLsAndTitlesMapping {
+        var mapping = FilenameStemsToURLsAndTitlesMapping()
         let enumerator = FileManager.default.enumerator(at: bookURL, includingPropertiesForKeys: [.nameKey])
         
         while let itemURL = enumerator?.nextObject() as? URL {
