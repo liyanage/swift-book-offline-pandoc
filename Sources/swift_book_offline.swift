@@ -128,7 +128,7 @@ struct BookConverter {
         return combinedMarkdownURL
     }
 
-    private let docInclusionRegex = /^-\s*`<doc:(\w+)>`.*$/
+    private let docInclusionRegex = /^-\s*`<doc:(?<filenameStem>\w+)>`.*$/
     func preprocessMainFileMarkdown(bookURL: URL, pandocURL: URL, mainFileMarkdownText: String) async throws -> [String] {
         // The DocC inclusion directives as well as cross-references refer to the per-chapter
         // files with the "stem", the filename without extension. We need to be able to map
@@ -159,7 +159,7 @@ struct BookConverter {
         for line in mainFileLines {
             if let match = line.firstMatch(of: docInclusionRegex) {
                 // We found a chapter include directive, add the lines of the referenced file at this point
-                let markdownFileToIncludeStem = String(match.1)
+                let markdownFileToIncludeStem = String(match.filenameStem)
                 combinedBookMarkdownLines += chapterFileStemToLinesMap[markdownFileToIncludeStem]!
                 continue
             }
@@ -184,7 +184,7 @@ struct BookConverter {
                 }
                 
                 group.addTask {
-                    let markdownFileToIncludeStem = String(match.1)
+                    let markdownFileToIncludeStem = String(match.filenameStem)
                     return (markdownFileToIncludeStem, try linesForIncludedDocument(markdownFileStem: markdownFileToIncludeStem, urlsAndTitlesMapping: urlsAndTitlesMapping, bookURL: bookURL))
                 }
             }
@@ -212,7 +212,7 @@ struct BookConverter {
         return ["\\newpage{}"] + lines + [""]
     }
 
-    private let definitionListRegex = /^- term (.+):/
+    private let definitionListRegex = /^- term (?<definitionTerm>.+):/
     private let whitespaceLineStartRegex = /^\s+/
     func rewriteDoccMarkdownChapterFileForPandoc(markdownLines: [String], urlsAndTitlesMapping: FilenameStemsToURLsAndTitlesMapping, bookURL: URL) throws -> [String] {
 
@@ -240,7 +240,7 @@ struct BookConverter {
             switch state {
                 case .start:
                     if let match = line.firstMatch(of: definitionListRegex) {
-                        out.append(String(match.1))
+                        out.append(String(match.definitionTerm))
                         state = .startDefinitionList
                     } else {
                         out.append(line)
@@ -277,17 +277,17 @@ struct BookConverter {
         return line
     }
 
-    private let internalReferenceRegex = /<doc:([\w#-]+)>/
+    private let internalReferenceRegex = /<doc:(?<crossReference>[\w#-]+)>/
     func rewriteDoccMarkdownLineForPandocInternalReferences(_ line: String, urlsAndTitlesMapping: FilenameStemsToURLsAndTitlesMapping) -> String {
         return line.replacing(internalReferenceRegex) { match     in
-            let reference = String(match.1)
+            let crossReference = String(match.crossReference)
             var humanReadableLabel: String
-            if reference.contains("#") {
-                let items = reference.split(separator: "#")
+            if crossReference.contains("#") {
+                let items = crossReference.split(separator: "#")
                 let section = items[1]
                 humanReadableLabel = String(section.replacing("-", with: " "))
             } else {
-                humanReadableLabel = String(urlsAndTitlesMapping[reference]!.title!)
+                humanReadableLabel = String(urlsAndTitlesMapping[crossReference]!.title!)
             }
             let identifier = humanReadableLabel.lowercased().replacing(" ", with: "-")
             return "[\(humanReadableLabel)](#\(identifier))"
@@ -303,26 +303,25 @@ struct BookConverter {
         }
     }
 
-    private let imageReferenceRegex = /!\[([^\]]*)\]\(([\w-]+)\)/
-    private let fileOutputRegex = /PNG image data, (\d+) x \d+/
+    private let imageReferenceRegex = /!\[(?<caption>[^\]]*)\]\((?<imageFilenamePrefix>[\w-]+)\)/
+    private let fileOutputRegex = /PNG image data, (?<imageWidth>\d+) x \d+/
     func rewriteDoccMarkdownLineForPandocImageReference(_ line: String, bookURL: URL) throws -> String {
-        guard let match: Regex<Regex<(Substring, Substring, Substring)>.RegexOutput>.Match = line.firstMatch(of: imageReferenceRegex) else {
+        guard let match = line.firstMatch(of: imageReferenceRegex) else {
             return line
         }
-        let (caption, imageFilenamePrefix) = (match.1, match.2)
-        let imageFilename = "\(imageFilenamePrefix)@2x.png"
+        let imageFilename = "\(match.imageFilenamePrefix)@2x.png"
         let imageURL = bookURL.appending(component: "TSPL.docc/Assets").appending(component: imageFilename)
         assert(FileManager().fileExists(atPath: imageURL.path()))
 
         let output = try stdoutForSubprocess(executablePath: "/usr/bin/file", arguments: [imageURL.path()])
         let fileCommandOutputMatch = output.firstMatch(of: fileOutputRegex)!
-        let width = Float(fileCommandOutputMatch.1)!
+        let imageWidth = Float(fileCommandOutputMatch.imageWidth)!
         // Dividing the width by two and then dividing that by about 760
         // gives us the scale factor that will match the image presentation
         // in the online web version.
-        let scalePercentage = Int(width / 2 / 7.6)
-        return "![\(caption)](\(imageFilename)){ width=\(scalePercentage)% }"
-    }    
+        let scalePercentage = Int(imageWidth / 2 / 7.6)
+        return "![\(match.caption)](\(imageFilename)){ width=\(scalePercentage)% }"
+    }
 
 
     private let headingRegex = /^(#+ .+)/
