@@ -8,6 +8,7 @@ import ArgumentParser
 import Foundation
 import OSLog
 
+// A "stem" is a filename without its file extension part
 typealias FilenameStemsToURLsAndTitlesMapping = [String: (url: URL, title: String?)]
 typealias FilenameStemAndLines = (filenameStem: String, lines: [String])
 typealias FilenameStemToLinesMapping = [String: [String]]
@@ -176,6 +177,13 @@ struct BookConverter {
         return combinedBookMarkdownLines
     }
     
+    // This builds a dictionary with one entry per chapter markdown file.
+    // For each entry, the key is the filename stem and the value is an
+    // arrays of strings representing the lines of the markdown text, after
+    // any preprocessing/rewriting.
+    //
+    // This is used to resolve the document inclusion directives in the
+    // top-level main markdown file.
     fileprivate func chapterFilenameStemToPreprocessedLinesMap(_ mainFileLines: Array<String>.SubSequence, _ urlsAndTitlesMapping: FilenameStemsToURLsAndTitlesMapping, _ bookURL: URL) async throws -> FilenameStemToLinesMapping {
         return try await withThrowingTaskGroup(of: FilenameStemAndLines.self) { group in
             for line in mainFileLines {
