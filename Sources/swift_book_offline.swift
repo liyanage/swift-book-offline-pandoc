@@ -6,9 +6,9 @@
 
 import ArgumentParser
 import Foundation
+import OSLog
 
-
-typealias FileStemsToURLsAndTitlesMapping = [String: (URL, String?)]
+typealias FileStemsToURLsAndTitlesMapping = [String: (url: URL, title: String?)]
 
 enum ConversionError: Error {
     case unknownFileReference(name: String)
@@ -30,8 +30,11 @@ struct swift_book_offline: AsyncParsableCommand {
     @Option(help: "The output path for the ePUB file")
     var outputPathEpub: String = "The-Swift-Programming-Language.epub"
 
+    @Option(help: "For debugging purposes: Wait for n seconds after launch")
+    var debugDelayStartSeconds: UInt32?
+
     @Flag(help: "Just preprocess the markdown content, don't produce final output")
-    var preprocessMarkdownOnly: Bool = false
+    var debugPreprocessMarkdownOnly: Bool = false
 
     func run() async throws {
         let bookURL = NSURL(fileURLWithPath: (bookPath as NSString).expandingTildeInPath as String)
@@ -39,15 +42,22 @@ struct swift_book_offline: AsyncParsableCommand {
         let outputURLPdf = NSURL(fileURLWithPath: (outputPathPdf as NSString).expandingTildeInPath as String)
         let outputURLEpub = NSURL(fileURLWithPath: (outputPathEpub as NSString).expandingTildeInPath as String)
 
+        if let debugDelayStartSeconds {
+            print("PID \(getpid()) pausing for \(debugDelayStartSeconds) seconds...")
+            sleep(debugDelayStartSeconds)
+        }
+
         try await BookConverter().generateOutput(
             bookURL: bookURL as URL,
             pandocURL: pandocURL as URL,
             outputURLPdf: outputURLPdf as URL,
             outputURLEpub: outputURLEpub as URL,
-            preprocessMarkdownOnly: preprocessMarkdownOnly)
+            preprocessMarkdownOnly: debugPreprocessMarkdownOnly)
     }
 }
 
+extension Regex : @unchecked @retroactive Sendable {
+}
 
 struct BookConverter {
 
@@ -132,44 +142,60 @@ struct BookConverter {
 
         // Because of the heading level shifting we performed earlier on the main file,
         // there will be some paragraphs that were formerly headings that we no longer need.
-        // This state machine skips over that content until we reach the first heading and then
-        // starts processing the DocC <doc:... include directives.
+        // This drop predicate skips over that and some other leading content until we reach
+        // the first (new) level 1 heading
+        let mainFileLines = splitLines(mainFileMarkdownText).drop { !$0.hasPrefix("# ") }
 
-        enum ParserState {        
-            case waitingForFirstLine
-            case processingDocumentIncludes
-        }
+        let signposter = OSSignposter()
+        let signpostID = signposter.makeSignpostID()
+        let state = signposter.beginInterval("preprocessMainFile", id: signpostID)
 
-        var state = ParserState.waitingForFirstLine
-        for line in splitLines(mainFileMarkdownText) {
-            switch state {
-                case .waitingForFirstLine:
-                    if line.hasPrefix("# ") {
-                        state = .processingDocumentIncludes
-                        combinedBookMarkdownLines.append(line)
-                    }
-                case .processingDocumentIncludes:
-                    if let match = line.firstMatch(of: docInclusionRegex) {
-                        // We found a chapter include directive, process and add
-                        // the lines of the referenced file at this point
-                        let markdownFileToIncludeStem = String(match.1)
-                        combinedBookMarkdownLines.append(contentsOf: try linesForIncludedDocument(markdownFileStem: markdownFileToIncludeStem, urlsAndTitlesMapping: urlsAndTitlesMapping, bookURL: bookURL))
-                        continue
-                    }
+        // First pass, concurrently preprocess chapter files that are included by the main file
+        let chapterFileStemToLinesMap = try await chapterFilenameStemToPreprocessedLinesMap(mainFileLines, urlsAndTitlesMapping, bookURL)
 
-                    // The line is something else, add it to the combined output unchanged
-                    if line.hasPrefix("# ") {
-                        combinedBookMarkdownLines.append("\\newpage{}")
-                    }
-                    combinedBookMarkdownLines.append(line)
+        // Second pass, replace inclusion directives with the preprocessed file content
+        for line in mainFileLines {
+            if let match = line.firstMatch(of: docInclusionRegex) {
+                // We found a chapter include directive, add the lines of the referenced file at this point
+                let markdownFileToIncludeStem = String(match.1)
+                combinedBookMarkdownLines += chapterFileStemToLinesMap[markdownFileToIncludeStem]!
+                continue
             }
+
+            // The line is something else, add it to the combined output unchanged
+            if line.hasPrefix("# ") {
+                combinedBookMarkdownLines.append("\\newpage{}")
+            }
+            combinedBookMarkdownLines.append(line)
         }
+
+        signposter.endInterval("preprocessMainFile", state)
 
         return combinedBookMarkdownLines
     }
-
+    
+    fileprivate func chapterFilenameStemToPreprocessedLinesMap(_ mainFileLines: Array<String>.SubSequence, _ urlsAndTitlesMapping: FileStemsToURLsAndTitlesMapping, _ bookURL: URL) async throws -> [String : [String]] {
+        return try await withThrowingTaskGroup(of: (filenameStem: String, lines: [String]).self) { group in
+            for line in mainFileLines {
+                guard let match = line.firstMatch(of: docInclusionRegex)  else {
+                    continue
+                }
+                
+                group.addTask {
+                    let markdownFileToIncludeStem = String(match.1)
+                    return (markdownFileToIncludeStem, try linesForIncludedDocument(markdownFileStem: markdownFileToIncludeStem, urlsAndTitlesMapping: urlsAndTitlesMapping, bookURL: bookURL))
+                }
+            }
+            var results: [String: [String]] = [:]
+            for try await result in group {
+                results[result.filenameStem] = result.lines
+            }
+            return results
+        }
+    }
+    
     func linesForIncludedDocument(markdownFileStem: String, urlsAndTitlesMapping: FileStemsToURLsAndTitlesMapping, bookURL: URL) throws -> [String] {
-        guard let markdownFileURL = urlsAndTitlesMapping[markdownFileStem]?.0 else {
+        guard let markdownFileURL = urlsAndTitlesMapping[markdownFileStem]?.url else {
             throw ConversionError.unknownFileReference(name: markdownFileStem)
         }
         var text = try! String(contentsOf: markdownFileURL, encoding: .utf8)
@@ -260,7 +286,7 @@ struct BookConverter {
                 let section = items[1]
                 humanReadableLabel = String(section.replacing("-", with: " "))
             } else {
-                humanReadableLabel = String(urlsAndTitlesMapping[reference]!.1!)
+                humanReadableLabel = String(urlsAndTitlesMapping[reference]!.title!)
             }
             let identifier = humanReadableLabel.lowercased().replacing(" ", with: "-")
             return "[\(humanReadableLabel)](#\(identifier))"

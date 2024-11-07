@@ -4,3 +4,4 @@ swiftbook-combined*.md
 .build
 !.vscode
 .vscode/settings.json
+.swiftpm/xcode
