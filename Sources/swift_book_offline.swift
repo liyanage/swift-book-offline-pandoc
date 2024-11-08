@@ -105,17 +105,22 @@ struct BookConverter {
             "--output", outputURLPdf.path(),
         ]
         optionSets.append(commonOptions + pdfOptions)
-
-        for options in optionSets {
-            try stdoutForSubprocess(executablePath: pandocURL.path(), arguments: options)
+        
+        await withThrowingTaskGroup { group in
+            for options in optionSets {
+                group.addTask {
+                    try stdoutForSubprocess(executablePath: pandocURL.path(), arguments: options)
+                    print("Output written to \(options[options.lastIndex(of: "--output")! + 1])")
+                }
+            }
         }
     }
 
     func combineAndRewriteMarkdownFiles(bookURL: URL, pandocURL: URL) async throws-> URL {
-        // Preprocess the main md file that pulls in all the per-chapter files and shift up its headings by
-        // two levels. We want to get the few headings ("Language Guide", "Language Reference" etc.) that introduce
-        // related sets of chapters up to level 1, so that they become the toplevel heading structure visible in
-        // the table of contents.
+        // Preprocess the main Markdown file that pulls in all the per-chapter files and shift
+        // up its headings by two levels. We want to get the few headings ("Language Guide",
+        // "Language Reference" etc.) that introduce related sets of chapters up to level 1,
+        // so that they become the top-level heading structure visible in the table of contents.
         let mainFilePath = bookURL.appending(component: "TSPL.docc/The-Swift-Programming-Language.md").path()
         let args = ["--from", "markdown", "--to", "markdown", mainFilePath, "--shift-heading-level-by=-2"]
         let mainFileMarkdownText = try stdoutForSubprocess(executablePath: pandocURL.path(), arguments: args)
@@ -443,8 +448,8 @@ struct BookConverter {
     func splitLines(_ text: String) -> [String] {
         var items = [String]()
         // We use this instead of split(whereSeparator:) or components(separatedBy:)
-        // because we need to match the behavior of Python's splitlines()
-        text.enumerateLines { line, stop in items.append(line) }
+        // because we need to match the behavior of Python's str.splitlines()
+        text.enumerateLines { line, _ in items.append(line) }
         return items
     }
 
