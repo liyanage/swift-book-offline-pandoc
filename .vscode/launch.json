@@ -35,7 +35,8 @@
             "args": [
                 "--pandoc-path",
                 "~/Downloads/pandoc-3.4-arm64/bin/pandoc",
-                "~/git/swift-book"
+                "~/git/swift-book",
+                "--debug-preprocess-markdown-only"
             ],
             "cwd": "${workspaceFolder:swift-book-offline}",
             "name": "Release swift-book-offline",
