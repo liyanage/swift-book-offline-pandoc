@@ -165,8 +165,7 @@ struct BookConverter {
         for line in mainFileLines {
             if let match = line.firstMatch(of: docInclusionRegex) {
                 // We found a chapter include directive, add the lines of the referenced file at this point
-                let markdownFileToIncludeStem = String(match.filenameStem)
-                combinedBookMarkdownLines += chapterFileStemToLinesMap[markdownFileToIncludeStem]!
+                combinedBookMarkdownLines += chapterFileStemToLinesMap[String(match.filenameStem)]!
                 continue
             }
 
@@ -182,10 +181,10 @@ struct BookConverter {
         return combinedBookMarkdownLines
     }
     
-    // This builds a dictionary with one entry per chapter markdown file.
-    // For each entry, the key is the filename stem and the value is an
-    // arrays of strings representing the lines of the markdown text, after
-    // any preprocessing/rewriting.
+    // This preprocesses/rewrites all per-chapter markdown files concurrently
+    // and then combines them in a dictionary where the key is the filename stem and
+    // the value is an array of strings representing the lines of the preprocessed
+    // markdown content for that file.
     //
     // This is used to resolve the document inclusion directives in the
     // top-level main markdown file.
@@ -414,9 +413,7 @@ struct BookConverter {
             if itemURL.pathExtension == "md" {
                 let stem = itemURL.deletingPathExtension().lastPathComponent
                 mapping[stem] = (itemURL, try await titleFromFirstLevel1HeadingInMarkdownFile(markdownFileURL: itemURL))
-
             }
-
         }
         
         return mapping
