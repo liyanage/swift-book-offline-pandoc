@@ -33,6 +33,9 @@ struct swift_book_offline: AsyncParsableCommand {
     @Option(help: "The output path for the ePUB file")
     var outputPathEpub: String = "The-Swift-Programming-Language.epub"
 
+    @Option(help: "Optional suffix to append to the Swift language version number in the document title, e.g. 'Beta 1'")
+    var versionNumberSuffix: String?
+
     @Option(help: "For debugging purposes: Wait for n seconds after launch")
     var debugDelayStartSeconds: UInt32?
 
@@ -40,10 +43,10 @@ struct swift_book_offline: AsyncParsableCommand {
     var debugPreprocessMarkdownOnly: Bool = false
 
     func run() async throws {
-        let bookURL = NSURL(fileURLWithPath: (bookPath as NSString).expandingTildeInPath as String)
-        let pandocURL = NSURL(fileURLWithPath: (pandocPath as NSString).expandingTildeInPath as String)
-        let outputURLPdf = NSURL(fileURLWithPath: (outputPathPdf as NSString).expandingTildeInPath as String)
-        let outputURLEpub = NSURL(fileURLWithPath: (outputPathEpub as NSString).expandingTildeInPath as String)
+        let bookURL = URL(fileURLWithPath: (bookPath as NSString).expandingTildeInPath)
+        let pandocURL = URL(fileURLWithPath: (pandocPath as NSString).expandingTildeInPath)
+        let outputURLPdf = URL(fileURLWithPath: (outputPathPdf as NSString).expandingTildeInPath)
+        let outputURLEpub = URL(fileURLWithPath: (outputPathEpub as NSString).expandingTildeInPath)
 
         if let debugDelayStartSeconds {
             print("PID \(getpid()) pausing for \(debugDelayStartSeconds) seconds...")
@@ -51,21 +54,23 @@ struct swift_book_offline: AsyncParsableCommand {
         }
 
         try await BookConverter().generateOutput(
-            bookURL: bookURL as URL,
-            pandocURL: pandocURL as URL,
-            outputURLPdf: outputURLPdf as URL,
-            outputURLEpub: outputURLEpub as URL,
-            preprocessMarkdownOnly: debugPreprocessMarkdownOnly)
+            bookURL: bookURL,
+            pandocURL: pandocURL,
+            outputURLPdf: outputURLPdf,
+            outputURLEpub: outputURLEpub,
+            preprocessMarkdownOnly: debugPreprocessMarkdownOnly,
+            versionNumberSuffix: versionNumberSuffix)
     }
 }
 
+// Adding Sendable conformance to Regex for async/await usage in this context
 extension Regex : @unchecked @retroactive Sendable {
 }
 
 struct BookConverter {
 
-    func generateOutput(bookURL: URL, pandocURL: URL, outputURLPdf: URL, outputURLEpub: URL, preprocessMarkdownOnly: Bool) async throws {
-        let combinedMarkdownURL = try await combineAndRewriteMarkdownFiles(bookURL: bookURL, pandocURL: pandocURL)
+    func generateOutput(bookURL: URL, pandocURL: URL, outputURLPdf: URL, outputURLEpub: URL, preprocessMarkdownOnly: Bool, versionNumberSuffix: String?) async throws {
+        let combinedMarkdownURL = try await combineAndRewriteMarkdownFiles(bookURL: bookURL, pandocURL: pandocURL, versionNumberSuffix: versionNumberSuffix)
         print("Preprocessed Markdown content written to \(combinedMarkdownURL.path())")
 
         if preprocessMarkdownOnly {
@@ -116,7 +121,7 @@ struct BookConverter {
         }
     }
 
-    func combineAndRewriteMarkdownFiles(bookURL: URL, pandocURL: URL) async throws-> URL {
+    func combineAndRewriteMarkdownFiles(bookURL: URL, pandocURL: URL, versionNumberSuffix: String?) async throws-> URL {
         // Preprocess the main Markdown file that pulls in all the per-chapter files and shift
         // up its headings by two levels. We want to get the few headings ("Language Guide",
         // "Language Reference" etc.) that introduce related sets of chapters up to level 1,
@@ -128,14 +133,14 @@ struct BookConverter {
         // This preprocessing step of the main file performs the inclusion of all referenced
         // per-chapter files, resulting in one large markdown file that contains all content,
         // which we then run through pandoc.
-        let combinedBookMarkdownLines = try await preprocessMainFileMarkdown(bookURL: bookURL, pandocURL: pandocURL, mainFileMarkdownText: mainFileMarkdownText)
+        let combinedBookMarkdownLines = try await preprocessMainFileMarkdown(bookURL: bookURL, pandocURL: pandocURL, mainFileMarkdownText: mainFileMarkdownText, versionNumberSuffix: versionNumberSuffix)
         let combinedMarkdownURL = URL(filePath: "swiftbook-combined.md")
         try combinedBookMarkdownLines.joined(separator: "\n").write(to: combinedMarkdownURL, atomically: true, encoding: .utf8)
         return combinedMarkdownURL
     }
 
     private let docInclusionRegex = /^-\s*`<doc:(?<filenameStem>\w+)>`.*$/
-    func preprocessMainFileMarkdown(bookURL: URL, pandocURL: URL, mainFileMarkdownText: String) async throws -> [String] {
+    func preprocessMainFileMarkdown(bookURL: URL, pandocURL: URL, mainFileMarkdownText: String, versionNumberSuffix: String?) async throws -> [String] {
         // The DocC inclusion directives as well as cross-references refer to the per-chapter
         // files with the "stem", the filename without extension. We need to be able to map
         // from those stems to the full file paths and also to the human-readable document
@@ -146,7 +151,7 @@ struct BookConverter {
         // markdown file. We start it out with a YAML header section that lets us control
         // many details of the pandoc conversion.
         var combinedBookMarkdownLines = [String]()
-        combinedBookMarkdownLines.append(contentsOf: try await markdownHeaderLines(bookURL: bookURL))
+        combinedBookMarkdownLines.append(contentsOf: try await markdownHeaderLines(bookURL: bookURL, versionNumberSuffix: versionNumberSuffix))
 
         // Because of the heading level shifting we performed earlier on the main file,
         // there will be some paragraphs that were formerly headings that we no longer need.
@@ -219,7 +224,7 @@ struct BookConverter {
         
         lines = try rewriteDoccMarkdownChapterFileForPandoc(markdownLines: lines, urlsAndTitlesMapping: urlsAndTitlesMapping, bookURL: bookURL)
 
-        // This enforces a page break after a chapter for PDF output and 
+        // This enforces a page break after a chapter for PDF output and
         // it doesn't seem to negatively impact the ePUB output.
         return ["\\newpage{}"] + lines + [""]
     }
@@ -291,11 +296,13 @@ struct BookConverter {
 
     private let internalReferenceRegex = /<doc:(?<crossReference>[\w#-]+)>/
     func rewriteDoccMarkdownLineForPandocInternalReferences(_ line: String, urlsAndTitlesMapping: FilenameStemsToURLsAndTitlesMapping) -> String {
-        return line.replacing(internalReferenceRegex) { match     in
+        return line.replacing(internalReferenceRegex) { match in
             let crossReference = String(match.crossReference)
-            var humanReadableLabel: String
+            let humanReadableLabel: String
+            
             if crossReference.contains("#") {
                 let items = crossReference.split(separator: "#")
+                assert(items.count > 1)
                 let section = items[1]
                 humanReadableLabel = String(section.replacing("-", with: " "))
             } else {
@@ -347,9 +354,13 @@ struct BookConverter {
         return line
     }
 
-    func markdownHeaderLines(bookURL: URL) async throws -> [String] {
-        let firstLevel1Heading = try await titleFromFirstLevel1HeadingInMarkdownFile(markdownFileURL: bookURL.appending(component: "TSPL.docc/The-Swift-Programming-Language.md"))!
+    func markdownHeaderLines(bookURL: URL, versionNumberSuffix: String?) async throws -> [String] {
+        var firstLevel1Heading = try await titleFromFirstLevel1HeadingInMarkdownFile(markdownFileURL: bookURL.appending(component: "TSPL.docc/The-Swift-Programming-Language.md"))!
         let (_, timestamp) = try gitTagOrRefForBookWorkingCopyURL(bookURL: bookURL)!
+
+        if let versionNumberSuffix, let match = firstLevel1Heading.firstMatch(of: /^(.+) \((.+)\)$/) {
+            firstLevel1Heading = "\(match.1) (\(match.2) \(versionNumberSuffix))"
+        }
 
         return splitLines("""
             ---
@@ -386,7 +397,7 @@ struct BookConverter {
     func gitTagOrRefForBookWorkingCopyURL(bookURL: URL) throws -> (String, String)? {
         var cmd = ["git", "-C", bookURL.path(), "tag", "--points-at", "HEAD"]
         var stdout = try stdoutForSubprocess(executablePath: "/usr/bin/env", arguments: cmd)
-        if let tag = splitLines(stdout).first, tag.count > 0 {
+        if let tag = splitLines(stdout).first, !tag.isEmpty {
             cmd = ["git", "-C", bookURL.path(), "for-each-ref", "--format", "%(taggerdate:short)", "refs/tags/\(tag)"]
             stdout = try stdoutForSubprocess(executablePath: "/usr/bin/env", arguments: cmd)
             let timestamp = splitLines(stdout).first!
@@ -395,7 +406,7 @@ struct BookConverter {
         
         cmd = ["git", "-C", bookURL.path(), "symbolic-ref", "--short", "HEAD"]
         stdout = try stdoutForSubprocess(executablePath: "/usr/bin/env", arguments: cmd)
-        if let ref = splitLines(stdout).first, ref.count > 0 {
+        if let ref = splitLines(stdout).first, !ref.isEmpty {
             cmd = ["git", "-C", bookURL.path(), "show", "--no-patch", "--pretty=format:%cs", ref]
             stdout = try stdoutForSubprocess(executablePath: "/usr/bin/env", arguments: cmd)
             let timestamp = splitLines(stdout).first!
@@ -425,7 +436,7 @@ struct BookConverter {
                 return String(line.dropFirst(2).trimmingCharacters(in: .whitespaces))
             }
         }
-        return nil;
+        return nil
     }
 
     @discardableResult
