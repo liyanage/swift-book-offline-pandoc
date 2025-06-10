@@ -17,7 +17,7 @@
             ]
         },
         {
-            "type": "lldb",
+            "type": "swift",
             "request": "launch",
             "args": [
                 "--pandoc-path",
@@ -30,7 +30,7 @@
             "preLaunchTask": "swift: Build Debug swift-book-offline"
         },
         {
-            "type": "lldb",
+            "type": "swift",
             "request": "launch",
             "args": [
                 "--pandoc-path",
