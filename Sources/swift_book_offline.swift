@@ -15,6 +15,7 @@ typealias FilenameStemToLinesMapping = [String: [String]]
 
 enum ConversionError: Error {
     case unknownFileReference(name: String)
+    case expectedTitleFormatMismatch(title: String)
 }
 
 
@@ -358,14 +359,24 @@ struct BookConverter {
         var firstLevel1Heading = try await titleFromFirstLevel1HeadingInMarkdownFile(markdownFileURL: bookURL.appending(component: "TSPL.docc/The-Swift-Programming-Language.md"))!
         let (_, timestamp) = try gitTagOrRefForBookWorkingCopyURL(bookURL: bookURL)!
 
-        if let versionNumberSuffix, let match = firstLevel1Heading.firstMatch(of: /^(.+) \((.+)\)$/) {
-            firstLevel1Heading = "\(match.1) (\(match.2) \(versionNumberSuffix))"
+        guard let titleMatch = firstLevel1Heading.firstMatch(of: /^(.+) \((.+)\)$/) else {
+            throw ConversionError.expectedTitleFormatMismatch(title: firstLevel1Heading)
+        }
+
+        var versionNumber = titleMatch.2
+
+        if let versionNumberSuffix {
+            versionNumber = "\(versionNumber) \(versionNumberSuffix)"
+            firstLevel1Heading = "\(titleMatch.1) (\(versionNumber))"
         }
 
         return splitLines("""
             ---
             title: \(firstLevel1Heading)
             date: "\(timestamp)"
+            author: swift.org
+            subject: \(firstLevel1Heading)
+            cover-image: cover/cover-\(versionNumber).png
             toc: true
             toc-depth: 4
             toc-own-page: true

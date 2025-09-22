@@ -5,3 +5,4 @@ swiftbook-combined*.md
 !.vscode
 .vscode/settings.json
 .swiftpm/xcode
+pandoc-*-arm64
