@@ -20,5 +20,11 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         ),
+        .executableTarget(
+            name: "cover-generator",
+            dependencies: [
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ]
+        ),
     ]
 )

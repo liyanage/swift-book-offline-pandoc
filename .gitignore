@@ -1,8 +1,10 @@
 The-Swift-Programming-Language*
 swiftbook-combined*.md
-*.pdf
+./*.pdf
 .build
 !.vscode
 .vscode/settings.json
 .swiftpm/xcode
 pandoc-*-arm64
+*~lock~
+cover/cover.afdesign
